@@ -366,7 +366,7 @@ void run()
     {
       labels = {"Copy", "Mul", "Add", "Triad", "Dot"};
       sizes = {
-        2 * sizeof(T) * ARRAY_SIZE,
+        1 * sizeof(T) * ARRAY_SIZE,
         2 * sizeof(T) * ARRAY_SIZE,
         3 * sizeof(T) * ARRAY_SIZE,
         3 * sizeof(T) * ARRAY_SIZE,

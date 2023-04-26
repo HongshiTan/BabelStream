@@ -27,9 +27,15 @@ class HIPStream : public Stream<T>
 
     // Device side pointers to arrays
     T *d_a;
+
     T *d_b;
     T *d_c;
     T *d_sum;
+
+    // For zero_copy
+    T *h_a;
+    T *h_b;
+    T *h_c;
 
 
   public:

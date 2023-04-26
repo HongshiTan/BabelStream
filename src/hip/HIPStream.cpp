@@ -11,6 +11,8 @@
 #define TBSIZE 1024
 #define DOT_NUM_BLOCKS 256
 
+#define __ZERO_COPY__
+
 void check_error(void)
 {
   hipError_t err = hipGetLastError();
@@ -57,9 +59,17 @@ HIPStream<T>::HIPStream(const int ARRAY_SIZE, const int device_index)
   if (props.totalGlobalMem < 3*ARRAY_SIZE*sizeof(T))
     throw std::runtime_error("Device does not have enough memory for all 3 buffers");
 
+
+#ifdef __ZERO_COPY__
+  hipHostMalloc((void**) &h_a, ARRAY_SIZE*sizeof(T), hipHostMallocMapped);
+  check_error();
+  hipHostGetDevicePointer( (void**) &d_a, (void*) h_a, 0 );
+  check_error();
+#else
   // Create device buffers
   hipMalloc(&d_a, ARRAY_SIZE*sizeof(T));
   check_error();
+#endif
   hipMalloc(&d_b, ARRAY_SIZE*sizeof(T));
   check_error();
   hipMalloc(&d_c, ARRAY_SIZE*sizeof(T));
@@ -88,10 +98,12 @@ HIPStream<T>::~HIPStream()
 template <typename T>
 __global__ void init_kernel(T * a, T * b, T * c, T initA, T initB, T initC)
 {
+  //asm volatile ("buffer_wbinvl1_vol");
   const int i = hipBlockDim_x * hipBlockIdx_x + hipThreadIdx_x;
   a[i] = initA;
   b[i] = initB;
   c[i] = initC;
+  //asm volatile ("buffer_wbinvl1_vol");
 }
 
 template <class T>
@@ -106,9 +118,16 @@ void HIPStream<T>::init_arrays(T initA, T initB, T initC)
 template <class T>
 void HIPStream<T>::read_arrays(std::vector<T>& a, std::vector<T>& b, std::vector<T>& c)
 {
+#ifdef __ZERO_COPY__
+  for (int i = 0; i < a.size(); i++)
+  {
+    a[i] = h_a[i];
+  }
+#else
   // Copy device memory to host
   hipMemcpy(a.data(), d_a, a.size()*sizeof(T), hipMemcpyDeviceToHost);
   check_error();
+#endif
   hipMemcpy(b.data(), d_b, b.size()*sizeof(T), hipMemcpyDeviceToHost);
   check_error();
   hipMemcpy(c.data(), d_c, c.size()*sizeof(T), hipMemcpyDeviceToHost);
@@ -119,6 +138,7 @@ void HIPStream<T>::read_arrays(std::vector<T>& a, std::vector<T>& b, std::vector
 template <typename T>
 __global__ void copy_kernel(const T * a, T * c)
 {
+  asm volatile ("buffer_wbinvl1_vol");
   const int i = hipBlockDim_x * hipBlockIdx_x + hipThreadIdx_x;
   c[i] = a[i];
 }
@@ -135,6 +155,7 @@ void HIPStream<T>::copy()
 template <typename T>
 __global__ void mul_kernel(T * b, const T * c)
 {
+  //asm volatile ("buffer_wbinvl1_vol");
   const T scalar = startScalar;
   const int i = hipBlockDim_x * hipBlockIdx_x + hipThreadIdx_x;
   b[i] = scalar * c[i];
@@ -152,6 +173,7 @@ void HIPStream<T>::mul()
 template <typename T>
 __global__ void add_kernel(const T * a, const T * b, T * c)
 {
+  asm volatile ("buffer_wbinvl1_vol");
   const int i = hipBlockDim_x * hipBlockIdx_x + hipThreadIdx_x;
   c[i] = a[i] + b[i];
 }
@@ -168,6 +190,7 @@ void HIPStream<T>::add()
 template <typename T>
 __global__ void triad_kernel(T * a, const T * b, const T * c)
 {
+  asm volatile ("buffer_wbinvl1_vol");
   const T scalar = startScalar;
   const int i = hipBlockDim_x * hipBlockIdx_x + hipThreadIdx_x;
   a[i] = b[i] + scalar * c[i];
@@ -185,6 +208,7 @@ void HIPStream<T>::triad()
 template <typename T>
 __global__ void nstream_kernel(T * a, const T * b, const T * c)
 {
+  asm volatile ("buffer_wbinvl1_vol");
   const T scalar = startScalar;
   const int i = hipBlockDim_x * hipBlockIdx_x + hipThreadIdx_x;
   a[i] += b[i] + scalar * c[i];
@@ -202,6 +226,7 @@ void HIPStream<T>::nstream()
 template <class T>
 __global__ void dot_kernel(const T * a, const T * b, T * sum, int array_size)
 {
+  asm volatile ("buffer_wbinvl1_vol");asm volatile ("buffer_wbinvl1_vol");
   __shared__ T tb_sum[TBSIZE];
 
   int i = hipBlockDim_x * hipBlockIdx_x + hipThreadIdx_x;
